@@ -1,0 +1,26 @@
+services:
+  sql_lib:
+    build:
+      dockerfile: Dockerfile
+      context: .docker/php
+    container_name: sql_lib
+    restart: "no"
+    working_dir: /app
+    depends_on:
+      - sql_mariadb
+    volumes:
+      - ./:/app
+
+  sql_mariadb:
+    image: mariadb:10.11
+    container_name: sql_mariadb
+    restart: "no"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: sql
+      MYSQL_PASSWORD: sql
+    volumes:
+      - db:/var/lib/mysql
+
+volumes:
+  db:
