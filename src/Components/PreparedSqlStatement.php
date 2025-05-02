@@ -3,7 +3,6 @@
 namespace ComponoKit\Sql\Components;
 
 use ComponoKit\Sql\Exceptions\QueryException;
-use ComponoKit\Sql\Interfaces\RepresentsEntity;
 use ComponoKit\Sql\Interfaces\RepresentsPreparedStatement;
 
 class PreparedSqlStatement implements RepresentsPreparedStatement
@@ -49,7 +48,7 @@ class PreparedSqlStatement implements RepresentsPreparedStatement
 	/**
 	 * @throws QueryException
 	 */
-	public function fetchEntity( string $className, array $params = [] ): null|RepresentsEntity
+	public function fetchEntity( string $className, array $params = [] ): ?object
 	{
 		$entity = $this->execute( $params )
 		               ->fetchObject( $className );
@@ -68,7 +67,7 @@ class PreparedSqlStatement implements RepresentsPreparedStatement
 	 * @param string $className
 	 * @param array  $params
 	 *
-	 * @return \Iterator<int, RepresentsEntity>
+	 * @return \Iterator<int, object>
 	 * @throws QueryException
 	 */
 	public function fetchEntities( string $className, array $params = [] ): \Iterator

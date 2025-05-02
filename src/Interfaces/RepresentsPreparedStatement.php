@@ -22,13 +22,13 @@ interface RepresentsPreparedStatement
 	/**
 	 * @throws QueryException
 	 */
-	public function fetchEntity( string $className, array $params = [] ): null|RepresentsEntity;
+	public function fetchEntity( string $className, array $params = [] ): ?object;
 
 	/**
 	 * @param string $className
 	 * @param array  $params
 	 *
-	 * @return \Iterator<int, RepresentsEntity>
+	 * @return \Iterator<int, object>
 	 * @throws QueryException
 	 */
 	public function fetchEntities( string $className, array $params = [] ): \Iterator;
@@ -45,7 +45,6 @@ interface RepresentsPreparedStatement
 	 * @throws QueryException
 	 */
 	public function fetchRows( array $params = [] ): \Iterator;
-
 
 	/**
 	 * @param string $groupColumn
