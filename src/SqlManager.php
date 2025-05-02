@@ -96,22 +96,26 @@ class SqlManager implements ManagesRelationalDatabases
 	 */
 	public function prepare( string $query ): RepresentsPreparedStatement
 	{
+		return new PreparedSqlStatement( $this->prepareQuery( $query ) );
+	}
+
+	public function execute( string $query, array $params ): void
+	{
+		$statement = $this->prepareQuery( $query );
+
 		try
 		{
-			$statement = @$this->getPdo()->prepare( $query );
-
-			if ( false === $statement || $statement->errorCode() > 0 )
+			if ( !@$statement->execute( $params ? : null ) || $statement->errorCode() > 0 )
 			{
 				throw (new QueryException( $statement->errorInfo()[2] ))->withErrors( $statement->errorInfo() )
 				                                                        ->withQuery( $query );
 			}
-
-			return new PreparedSqlStatement( $statement );
 		}
 		catch ( \PDOException )
 		{
-			throw (new QueryException( $this->getPdo()->errorInfo()[2] ))->withErrors( $this->getPdo()->errorInfo() )
-			                                                             ->withQuery( $query );
+			throw (new QueryException( $statement->errorInfo()[2] ))->withErrors( $statement->errorInfo() )
+			                                                        ->withQuery( $query )
+			                                                        ->withPreparedParameters( $params );
 		}
 	}
 
@@ -123,5 +127,26 @@ class SqlManager implements ManagesRelationalDatabases
 	protected function configure(): void
 	{
 		/** Override if needed */
+	}
+
+	private function prepareQuery( string $query ): \PDOStatement
+	{
+		try
+		{
+			$statement = @$this->getPdo()->prepare( $query );
+
+			if ( false === $statement || $statement->errorCode() > 0 )
+			{
+				throw (new QueryException( $statement->errorInfo()[2] ))->withErrors( $statement->errorInfo() )
+				                                                        ->withQuery( $query );
+			}
+
+			return $statement;
+		}
+		catch ( \PDOException )
+		{
+			throw (new QueryException( $this->getPdo()->errorInfo()[2] ))->withErrors( $this->getPdo()->errorInfo() )
+			                                                             ->withQuery( $query );
+		}
 	}
 }

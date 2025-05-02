@@ -36,6 +36,8 @@ interface ManagesRelationalDatabases
 	 */
 	public function prepare( string $query ): RepresentsPreparedStatement;
 
+	public function execute( string $query, array $params ): void;
+
 	/**
 	 * @throws QueryException
 	 */

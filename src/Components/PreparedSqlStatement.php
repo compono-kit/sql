@@ -149,7 +149,7 @@ class PreparedSqlStatement implements RepresentsPreparedStatement
 		}
 	}
 
-	private function execute( array $params ): \PDOStatement
+	public function execute( array $params ): \PDOStatement
 	{
 		try
 		{
