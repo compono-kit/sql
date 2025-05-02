@@ -6,9 +6,7 @@ use ComponoKit\Sql\Interfaces\ManagesRelationalDatabases;
 
 trait InjectingRelationalDatabaseManager
 {
-	private ManagesRelationalDatabases $dbManager;
-
-	public function __construct( private ManagesRelationalDatabases $sqlManager )
+	public function __construct( private ManagesRelationalDatabases $dbManager )
 	{
 	}
 }
