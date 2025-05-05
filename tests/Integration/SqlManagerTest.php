@@ -10,8 +10,12 @@ use PHPUnit\Framework\TestCase;
 
 class SqlManagerTest extends TestCase
 {
+	private static string $tmpDumpFile;
+
 	public static function setUpBeforeClass(): void
 	{
+		self::$tmpDumpFile = __DIR__ . '/dump.sql';
+
 		$pdo = new \PDO( 'mysql:host=sql_mariadb;port=3306;dbname=', 'root', 'root' );
 		$pdo->exec( 'DROP DATABASE IF EXISTS `sql_lib_test`' );
 		$pdo->exec( 'CREATE DATABASE `sql_lib_test` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci' );
@@ -21,6 +25,11 @@ class SqlManagerTest extends TestCase
 	{
 		$pdo = new \PDO( 'mysql:host=sql_mariadb;port=3306;dbname=', 'root', 'root' );
 		$pdo->exec( 'DROP DATABASE IF EXISTS `sql_lib_test`' );
+
+		if ( is_file( self::$tmpDumpFile ) )
+		{
+			unlink( self::$tmpDumpFile );
+		}
 	}
 
 	public function testConnectAndIsConnected(): void
@@ -46,10 +55,15 @@ class SqlManagerTest extends TestCase
 		$sqlManager = $this->buildSqlManager();
 
 		$sqlManager->connect();
+		$sqlManager->getPdo()->exec( 'CREATE TABLE test_table (id INT PRIMARY KEY)' );
 		$sqlManager->beginTransaction();
 		$this->assertTrue( $sqlManager->inTransaction() );
+		$sqlManager->execute( 'INSERT INTO test_table (id) VALUES (:id)', [ 'id' => 1 ] );
 		$sqlManager->commit();
 		$this->assertFalse( $sqlManager->inTransaction() );
+		$this->assertEquals( 1, $sqlManager->getPdo()->query('SELECT * FROM test_table WHERE id = 1')->fetchColumn() );
+
+		$sqlManager->getPdo()->exec('DROP TABLE test_table');
 	}
 
 	public function testBeginRollBackTransaction(): void
@@ -57,10 +71,15 @@ class SqlManagerTest extends TestCase
 		$sqlManager = $this->buildSqlManager();
 
 		$sqlManager->connect();
+		$sqlManager->getPdo()->exec( 'CREATE TABLE test_table (id INT PRIMARY KEY)' );
 		$sqlManager->beginTransaction();
 		$this->assertTrue( $sqlManager->inTransaction() );
+		$sqlManager->execute( 'INSERT INTO test_table (id) VALUES (:id)', [ 'id' => 1 ] );
 		$sqlManager->rollBack();
 		$this->assertFalse( $sqlManager->inTransaction() );
+		$this->assertFalse( $sqlManager->getPdo()->query('SELECT * FROM test_table WHERE id = 1')->fetchColumn() );
+
+		$sqlManager->getPdo()->exec('DROP TABLE test_table');
 	}
 
 	public function testPrepareValidQuery(): void
@@ -71,6 +90,8 @@ class SqlManagerTest extends TestCase
 		$sqlManager->getPdo()->exec( 'CREATE TABLE test_table (id INT PRIMARY KEY)' );
 		$stmt = $sqlManager->prepare( 'SELECT * FROM test_table' );
 		$this->assertInstanceOf( RepresentsPreparedStatement::class, $stmt );
+
+		$sqlManager->getPdo()->exec('DROP TABLE test_table');
 	}
 
 	public function testPrepareInvalidQueryThrows(): void
@@ -91,16 +112,15 @@ class SqlManagerTest extends TestCase
 		$dumpContent = 'CREATE TABLE test_import (id INT PRIMARY KEY); 
 						INSERT INTO test_import (id) VALUES (1);';
 
-		$tempFile = tempnam( sys_get_temp_dir(), 'sql' );
-		file_put_contents( $tempFile, $dumpContent );
+		file_put_contents( self::$tmpDumpFile, $dumpContent );
 
-		$sqlManager->importDump( $tempFile );
+		$sqlManager->importDump( self::$tmpDumpFile );
 
 		$result = $sqlManager->getPdo()->query( 'SELECT * FROM test_import' )->fetchAll( \PDO::FETCH_ASSOC );
 		$this->assertCount( 1, $result );
 		$this->assertEquals( [ 'id' => 1 ], $result[0] );
 
-		unlink( $tempFile );
+		unlink( self::$tmpDumpFile );
 	}
 
 	private function buildSqlManager( bool $emulatedPrepares = true ): SqlManager

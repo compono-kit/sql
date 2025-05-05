@@ -12,7 +12,7 @@ services:
       - ./:/app
 
   sql_mariadb:
-    image: mariadb:10.11
+    image: mariadb:11.7
     container_name: sql_mariadb
     restart: "no"
     environment:
@@ -24,3 +24,7 @@ services:
 
 volumes:
   db:
+networks:
+  default:
+    external: true
+    name: shared-network
