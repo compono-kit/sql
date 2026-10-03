@@ -20,12 +20,12 @@
   },
   "autoload": {
     "psr-4": {
-      "ComponoKit\Sql\\": "src/"
+      "ComponoKit\\Sql\\": "src/"
     }
   },
   "autoload-dev": {
     "psr-4": {
-      "ComponoKit\Sql\Tests\\": "tests/"
+      "ComponoKit\\Sql\\Tests\\": "tests/"
     }
   },
   "scripts": {
