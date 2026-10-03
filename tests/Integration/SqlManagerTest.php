@@ -4,6 +4,8 @@ namespace ComponoKit\Sql\Tests\Integration;
 
 use ComponoKit\Sql\Configs\DefaultSqlManagerConfig;
 use ComponoKit\Sql\Exceptions\QueryException;
+use ComponoKit\Sql\Exceptions\TransactionLogicException;
+use ComponoKit\Sql\Exceptions\TransactionRuntimeException;
 use ComponoKit\Sql\Interfaces\RepresentsPreparedStatement;
 use ComponoKit\Sql\SqlManager;
 use PHPUnit\Framework\TestCase;
@@ -88,8 +90,8 @@ class SqlManagerTest extends TestCase
 
 		$sqlManager->connect();
 		$sqlManager->getPdo()->exec( 'CREATE TABLE test_table (id INT PRIMARY KEY)' );
-		$stmt = $sqlManager->prepare( 'SELECT * FROM test_table' );
-		$this->assertInstanceOf( RepresentsPreparedStatement::class, $stmt );
+		$statement = $sqlManager->prepare( 'SELECT * FROM test_table' );
+		$this->assertInstanceOf( RepresentsPreparedStatement::class, $statement );
 
 		$sqlManager->getPdo()->exec('DROP TABLE test_table');
 	}
@@ -121,6 +123,73 @@ class SqlManagerTest extends TestCase
 		$this->assertEquals( [ 'id' => 1 ], $result[0] );
 
 		unlink( self::$tmpDumpFile );
+	}
+
+	public function testExecuteReturnsAffectedRowCount(): void
+	{
+		$sqlManager = $this->buildSqlManager();
+
+		$sqlManager->getPdo()->exec( 'CREATE TABLE test_table (id INT PRIMARY KEY)' );
+
+		$this->assertSame( 2, $sqlManager->execute( 'INSERT INTO test_table (id) VALUES (1), (2)' ) );
+		$this->assertSame( 1, $sqlManager->execute( 'DELETE FROM test_table WHERE id = :id', [ 'id' => 1 ] ) );
+
+		$sqlManager->getPdo()->exec( 'DROP TABLE test_table' );
+	}
+
+	public function testLastInsertId(): void
+	{
+		$sqlManager = $this->buildSqlManager();
+
+		$sqlManager->getPdo()->exec( 'CREATE TABLE test_table (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(10))' );
+		$sqlManager->execute( 'INSERT INTO test_table (name) VALUES (:name)', [ 'name' => 'first' ] );
+		$sqlManager->execute( 'INSERT INTO test_table (name) VALUES (:name)', [ 'name' => 'second' ] );
+
+		$this->assertSame( '2', $sqlManager->lastInsertId() );
+
+		$sqlManager->getPdo()->exec( 'DROP TABLE test_table' );
+	}
+
+	public function testExecuteInvalidQueryThrows(): void
+	{
+		$sqlManager = $this->buildSqlManager( false );
+
+		$this->expectException( QueryException::class );
+		$sqlManager->execute( 'INSERT INTO not_existing_table (id) VALUES (1)' );
+	}
+
+	public function testBeginTransactionTwiceThrows(): void
+	{
+		$sqlManager = $this->buildSqlManager();
+
+		$sqlManager->beginTransaction();
+
+		$this->expectException( TransactionRuntimeException::class );
+		$sqlManager->beginTransaction();
+	}
+
+	public function testCommitWithoutTransactionThrows(): void
+	{
+		$sqlManager = $this->buildSqlManager();
+
+		$this->expectException( TransactionLogicException::class );
+		$sqlManager->commit();
+	}
+
+	public function testRollBackWithoutTransactionThrows(): void
+	{
+		$sqlManager = $this->buildSqlManager();
+
+		$this->expectException( TransactionLogicException::class );
+		$sqlManager->rollBack();
+	}
+
+	public function testImportNotExistingDumpThrows(): void
+	{
+		$sqlManager = $this->buildSqlManager();
+
+		$this->expectException( \RuntimeException::class );
+		$sqlManager->importDump( __DIR__ . '/not_existing_dump.sql' );
 	}
 
 	private function buildSqlManager( bool $emulatedPrepares = true ): SqlManager

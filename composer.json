@@ -1,9 +1,7 @@
 {
   "name": "compono-kit/sql",
   "description": "Tiny sql library and pdo wrapper",
-  "minimum-stability": "dev",
-  "prefer-stable": true,
-  "license": "proprietary",
+  "license": "MIT",
   "authors": [
     {
       "name": "Benjamin Bruska",
@@ -15,16 +13,22 @@
     "ext-pdo": "*"
   },
   "require-dev": {
-    "phpunit/phpunit": "^9.0.0"
+    "phpunit/phpunit": "^10.5"
+  },
+  "suggest": {
+    "ext-pdo_mysql": "Required for MySqlManager and DefaultSqlManagerConfig"
   },
   "autoload": {
     "psr-4": {
-      "ComponoKit\\Sql\\": "src/"
+      "ComponoKit\Sql\\": "src/"
     }
   },
   "autoload-dev": {
     "psr-4": {
-      "ComponoKit\\Sql\\Tests\\": "tests/"
+      "ComponoKit\Sql\Tests\\": "tests/"
     }
+  },
+  "scripts": {
+    "test": "phpunit -c build/phpunit.xml"
   }
 }

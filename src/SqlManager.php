@@ -45,6 +45,8 @@ class SqlManager implements ManagesRelationalDatabases
 			$this->config->getDriverOptions()
 		);
 
+		$this->pdo->setAttribute( \PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION );
+
 		$this->configure();
 	}
 
@@ -58,7 +60,16 @@ class SqlManager implements ManagesRelationalDatabases
 	 */
 	public function beginTransaction(): void
 	{
-		if ( !$this->getPdo()->beginTransaction() )
+		try
+		{
+			$result = $this->getPdo()->beginTransaction();
+		}
+		catch ( \PDOException $exception )
+		{
+			throw new TransactionRuntimeException( 'Beginning transaction failed: ' . $exception->getMessage(), 0, $exception );
+		}
+
+		if ( !$result )
 		{
 			throw new TransactionRuntimeException( 'Beginning transaction failed' );
 		}
@@ -69,7 +80,16 @@ class SqlManager implements ManagesRelationalDatabases
 	 */
 	public function commit(): void
 	{
-		if ( !$this->getPdo()->commit() )
+		try
+		{
+			$result = $this->getPdo()->commit();
+		}
+		catch ( \PDOException $exception )
+		{
+			throw new TransactionLogicException( 'Committing transaction failed: ' . $exception->getMessage(), 0, $exception );
+		}
+
+		if ( !$result )
 		{
 			throw new TransactionLogicException( 'Committing transaction failed' );
 		}
@@ -80,7 +100,16 @@ class SqlManager implements ManagesRelationalDatabases
 	 */
 	public function rollBack(): void
 	{
-		if ( !$this->getPdo()->rollBack() )
+		try
+		{
+			$result = $this->getPdo()->rollBack();
+		}
+		catch ( \PDOException $exception )
+		{
+			throw new TransactionLogicException( 'Transaction rollback failed: ' . $exception->getMessage(), 0, $exception );
+		}
+
+		if ( !$result )
 		{
 			throw new TransactionLogicException( 'Transaction rollback failed' );
 		}
@@ -99,54 +128,73 @@ class SqlManager implements ManagesRelationalDatabases
 		return new PreparedSqlStatement( $this->prepareQuery( $query ) );
 	}
 
-	public function execute( string $query, array $params ): void
+	/**
+	 * @throws QueryException
+	 */
+	public function execute( string $query, array $params = [] ): int
 	{
 		$statement = $this->prepareQuery( $query );
 
 		try
 		{
-			if ( !@$statement->execute( $params ? : null ) || $statement->errorCode() > 0 )
-			{
-				throw (new QueryException( $statement->errorInfo()[2] ))->withErrors( $statement->errorInfo() )
-				                                                        ->withQuery( $query );
-			}
+			$statement->execute( $params ? : null );
 		}
-		catch ( \PDOException )
+		catch ( \PDOException $exception )
 		{
-			throw (new QueryException( $statement->errorInfo()[2] ))->withErrors( $statement->errorInfo() )
-			                                                        ->withQuery( $query )
-			                                                        ->withPreparedParameters( $params );
+			throw new QueryException( $query, $params, $exception );
 		}
+
+		return $statement->rowCount();
 	}
 
+	public function lastInsertId(): string
+	{
+		return (string)$this->getPdo()->lastInsertId();
+	}
+
+	/**
+	 * @throws QueryException
+	 */
 	public function importDump( string $filePathName ): void
 	{
-		$this->getPdo()->exec( file_get_contents( $filePathName ) );
+		if ( !is_file( $filePathName ) || !is_readable( $filePathName ) )
+		{
+			throw new \RuntimeException( sprintf( 'Dump file "%s" is not readable', $filePathName ) );
+		}
+
+		$dump = file_get_contents( $filePathName );
+
+		if ( false === $dump )
+		{
+			throw new \RuntimeException( sprintf( 'Dump file "%s" could not be read', $filePathName ) );
+		}
+
+		try
+		{
+			$this->getPdo()->exec( $dump );
+		}
+		catch ( \PDOException $exception )
+		{
+			throw new QueryException( $dump, [], $exception );
+		}
 	}
 
 	protected function configure(): void
 	{
-		/** Override if needed */
 	}
 
+	/**
+	 * @throws QueryException
+	 */
 	private function prepareQuery( string $query ): \PDOStatement
 	{
 		try
 		{
-			$statement = @$this->getPdo()->prepare( $query );
-
-			if ( false === $statement || $statement->errorCode() > 0 )
-			{
-				throw (new QueryException( $statement->errorInfo()[2] ))->withErrors( $statement->errorInfo() )
-				                                                        ->withQuery( $query );
-			}
-
-			return $statement;
+			return $this->getPdo()->prepare( $query );
 		}
-		catch ( \PDOException )
+		catch ( \PDOException $exception )
 		{
-			throw (new QueryException( $this->getPdo()->errorInfo()[2] ))->withErrors( $this->getPdo()->errorInfo() )
-			                                                             ->withQuery( $query );
+			throw new QueryException( $query, [], $exception );
 		}
 	}
 }

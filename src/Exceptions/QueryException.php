@@ -2,17 +2,11 @@
 
 namespace ComponoKit\Sql\Exceptions;
 
-class QueryException extends \LogicException
+class QueryException extends \RuntimeException
 {
-	private array  $errors             = [];
-
-	private string $query              = '';
-
-	private array  $preparedParameters = [];
-
-	public function getErrors(): array
+	public function __construct( private string $query, private array $preparedParameters, \PDOException $previous )
 	{
-		return $this->errors;
+		parent::__construct( $previous->getMessage(), 0, $previous );
 	}
 
 	public function getQuery(): string
@@ -25,24 +19,10 @@ class QueryException extends \LogicException
 		return $this->preparedParameters;
 	}
 
-	public function withErrors( array $errors ): self
+	public function getDriverErrorCode(): ?int
 	{
-		$this->errors = $errors;
+		$driverErrorCode = $this->getPrevious()->errorInfo[1] ?? null;
 
-		return $this;
-	}
-
-	public function withQuery( string $query ): self
-	{
-		$this->query = $query;
-
-		return $this;
-	}
-
-	public function withPreparedParameters( array $preparedParameters ): self
-	{
-		$this->preparedParameters = $preparedParameters;
-
-		return $this;
+		return null === $driverErrorCode ? null : (int)$driverErrorCode;
 	}
 }

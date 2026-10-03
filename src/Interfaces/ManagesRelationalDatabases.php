@@ -8,6 +8,8 @@ use ComponoKit\Sql\Exceptions\TransactionRuntimeException;
 
 interface ManagesRelationalDatabases
 {
+	public function getPdo(): \PDO;
+
 	public function isConnected(): bool;
 
 	public function connect(): void;
@@ -36,7 +38,12 @@ interface ManagesRelationalDatabases
 	 */
 	public function prepare( string $query ): RepresentsPreparedStatement;
 
-	public function execute( string $query, array $params ): void;
+	/**
+	 * @throws QueryException
+	 */
+	public function execute( string $query, array $params = [] ): int;
+
+	public function lastInsertId(): string;
 
 	/**
 	 * @throws QueryException

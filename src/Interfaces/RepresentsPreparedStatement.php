@@ -14,7 +14,7 @@ interface RepresentsPreparedStatement
 	/**
 	 * @param array $params
 	 *
-	 * @return \Iterator<int, string>
+	 * @return \Iterator<int, ?string>
 	 * @throws QueryException
 	 */
 	public function fetchValues( array $params = [] ): \Iterator;
@@ -50,8 +50,10 @@ interface RepresentsPreparedStatement
 	 * @param string $groupColumn
 	 * @param array  $params
 	 *
-	 * @return \Iterator<int,array> VALUE_OF_GROUP_COLUMN => [ associative arrays of the rows ]
+	 * @return \Iterator<int|string|null,array> VALUE_OF_GROUP_COLUMN => [ associative arrays of the rows ]
 	 * @throws QueryException
 	 */
 	public function fetchGroupedBy( string $groupColumn, array $params = [] ): \Iterator;
+
+	public function getAffectedRowCount(): int;
 }

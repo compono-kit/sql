@@ -16,32 +16,30 @@ class PreparedSqlStatement implements RepresentsPreparedStatement
 	 */
 	public function fetchValue( array $params = [] ): ?string
 	{
-		$result = $this->execute( $params )
-		               ->fetch( \PDO::FETCH_COLUMN );
+		$this->execute( $params );
+		$result = $this->fetchFromStatement( \PDO::FETCH_COLUMN );
 
 		if ( false === $result )
 		{
-			$this->guardFetchResultIsNoFailure();
-
 			return null;
 		}
 
-		return (string)$result;
+		return $this->castToNullableString( $result );
 	}
 
 	/**
 	 * @param array $params
 	 *
-	 * @return \Iterator<int,string>
+	 * @return \Iterator<int,?string>
 	 * @throws QueryException
 	 */
 	public function fetchValues( array $params = [] ): \Iterator
 	{
-		$statement = $this->execute( $params );
+		$this->execute( $params );
 
-		while ( $value = $statement->fetch( \PDO::FETCH_COLUMN ) )
+		while ( false !== ($value = $this->fetchFromStatement( \PDO::FETCH_COLUMN )) )
 		{
-			yield $value;
+			yield $this->castToNullableString( $value );
 		}
 	}
 
@@ -50,13 +48,11 @@ class PreparedSqlStatement implements RepresentsPreparedStatement
 	 */
 	public function fetchEntity( string $className, array $params = [] ): ?object
 	{
-		$entity = $this->execute( $params )
-		               ->fetchObject( $className );
+		$this->execute( $params );
+		$entity = $this->fetchObjectFromStatement( $className );
 
 		if ( false === $entity )
 		{
-			$this->guardFetchResultIsNoFailure();
-
 			return null;
 		}
 
@@ -72,9 +68,9 @@ class PreparedSqlStatement implements RepresentsPreparedStatement
 	 */
 	public function fetchEntities( string $className, array $params = [] ): \Iterator
 	{
-		$statement = $this->execute( $params );
+		$this->execute( $params );
 
-		while ( $entity = $statement->fetchObject( $className ) )
+		while ( false !== ($entity = $this->fetchObjectFromStatement( $className )) )
 		{
 			yield $entity;
 		}
@@ -85,13 +81,11 @@ class PreparedSqlStatement implements RepresentsPreparedStatement
 	 */
 	public function fetchRow( array $params = [] ): array
 	{
-		$statement = $this->execute( $params );
-		$rowData   = $statement->fetch( \PDO::FETCH_ASSOC );
+		$this->execute( $params );
+		$rowData = $this->fetchFromStatement( \PDO::FETCH_ASSOC );
 
 		if ( false === $rowData )
 		{
-			$this->guardFetchResultIsNoFailure();
-
 			return [];
 		}
 
@@ -106,9 +100,9 @@ class PreparedSqlStatement implements RepresentsPreparedStatement
 	 */
 	public function fetchRows( array $params = [] ): \Iterator
 	{
-		$statement = $this->execute( $params );
+		$this->execute( $params );
 
-		while ( $rowData = $statement->fetch( \PDO::FETCH_ASSOC ) )
+		while ( false !== ($rowData = $this->fetchFromStatement( \PDO::FETCH_ASSOC )) )
 		{
 			yield $rowData;
 		}
@@ -120,20 +114,21 @@ class PreparedSqlStatement implements RepresentsPreparedStatement
 	 * @param string $groupColumn
 	 * @param array  $params
 	 *
-	 * @return \Iterator<int,array> VALUE_OF_GROUP_COLUMN => [ associative arrays of the rows ]
+	 * @return \Iterator<int|string|null,array> VALUE_OF_GROUP_COLUMN => [ associative arrays of the rows ]
 	 * @throws QueryException
 	 */
 	public function fetchGroupedBy( string $groupColumn, array $params = [] ): \Iterator
 	{
+		$hasGroup     = false;
 		$currentGroup = null;
 		$groupRows    = [];
-		$statement    = $this->execute( $params );
+		$this->execute( $params );
 
-		while ( $row = $statement->fetch( \PDO::FETCH_ASSOC ) )
+		while ( false !== ($row = $this->fetchFromStatement( \PDO::FETCH_ASSOC )) )
 		{
 			$groupKey = $row[ $groupColumn ];
 
-			if ( null !== $currentGroup && $groupKey !== $currentGroup )
+			if ( $hasGroup && $groupKey !== $currentGroup )
 			{
 				yield $currentGroup => $groupRows;
 				$groupRows = [];
@@ -141,40 +136,69 @@ class PreparedSqlStatement implements RepresentsPreparedStatement
 
 			$groupRows[]  = $row;
 			$currentGroup = $groupKey;
+			$hasGroup     = true;
 		}
 
-		if ( null !== $currentGroup )
+		if ( $hasGroup )
 		{
 			yield $currentGroup => $groupRows;
 		}
 	}
 
+	public function getAffectedRowCount(): int
+	{
+		return $this->pdoStatement->rowCount();
+	}
+
+	/**
+	 * @throws QueryException
+	 */
 	public function execute( array $params ): \PDOStatement
 	{
 		try
 		{
-			if ( !@$this->pdoStatement->execute( $params ? : null ) || $this->pdoStatement->errorCode() > 0 )
-			{
-				throw (new QueryException( $this->pdoStatement->errorInfo()[2] ))->withErrors( $this->pdoStatement->errorInfo() )
-				                                                                 ->withQuery( $this->pdoStatement->queryString );
-			}
-
-			return $this->pdoStatement;
+			$this->pdoStatement->execute( $params ? : null );
 		}
-		catch ( \PDOException )
+		catch ( \PDOException $exception )
 		{
-			throw (new QueryException( $this->pdoStatement->errorInfo()[2] ))->withErrors( $this->pdoStatement->errorInfo() )
-			                                                                 ->withQuery( $this->pdoStatement->queryString )
-			                                                                 ->withPreparedParameters( $params );
+			throw new QueryException( $this->pdoStatement->queryString, $params, $exception );
+		}
+
+		return $this->pdoStatement;
+	}
+
+	private function castToNullableString( mixed $value ): ?string
+	{
+		return null === $value ? null : (string)$value;
+	}
+
+	/**
+	 * @throws QueryException
+	 */
+	private function fetchFromStatement( int $mode ): mixed
+	{
+		try
+		{
+			return $this->pdoStatement->fetch( $mode );
+		}
+		catch ( \PDOException $exception )
+		{
+			throw new QueryException( $this->pdoStatement->queryString, [], $exception );
 		}
 	}
 
-	private function guardFetchResultIsNoFailure(): void
+	/**
+	 * @throws QueryException
+	 */
+	private function fetchObjectFromStatement( string $className ): object|false
 	{
-		if ( $this->pdoStatement->errorCode() > 0 )
+		try
 		{
-			throw (new QueryException( $this->pdoStatement->errorInfo()[2] ))->withErrors( $this->pdoStatement->errorInfo() )
-			                                                                 ->withQuery( $this->pdoStatement->queryString );
+			return $this->pdoStatement->fetchObject( $className );
+		}
+		catch ( \PDOException $exception )
+		{
+			throw new QueryException( $this->pdoStatement->queryString, [], $exception );
 		}
 	}
 }

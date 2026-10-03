@@ -28,6 +28,8 @@ class PreparedSqlStatementTest extends TestCase
 		);
 
 		$pdo->exec( "INSERT INTO test_users (name, role) VALUES ('Alice', 'admin'), ('Bob', 'user'), ('Charlie', 'user')" );
+		$pdo->exec( 'CREATE TABLE test_values (id INT AUTO_INCREMENT PRIMARY KEY, value VARCHAR(10) NULL, category VARCHAR(10) NULL)' );
+		$pdo->exec( "INSERT INTO test_values (value, category) VALUES ('0', NULL), (NULL, NULL), ('', 'a'), ('x', 'a')" );
 	}
 
 	public static function tearDownAfterClass(): void
@@ -40,8 +42,8 @@ class PreparedSqlStatementTest extends TestCase
 	{
 		$sqlManager = $this->buildSqlManager();
 
-		$stmt  = $sqlManager->prepare( 'SELECT name FROM test_users WHERE id = :id' );
-		$value = $stmt->fetchValue( [ 'id' => 1 ] );
+		$statement  = $sqlManager->prepare( 'SELECT name FROM test_users WHERE id = :id' );
+		$value = $statement->fetchValue( [ 'id' => 1 ] );
 
 		$this->assertEquals( 'Alice', $value );
 	}
@@ -50,8 +52,8 @@ class PreparedSqlStatementTest extends TestCase
 	{
 		$sqlManager = $this->buildSqlManager();
 
-		$stmt   = $sqlManager->prepare( 'SELECT name FROM test_users ORDER BY id' );
-		$values = iterator_to_array( $stmt->fetchValues() );
+		$statement   = $sqlManager->prepare( 'SELECT name FROM test_users ORDER BY id' );
+		$values = iterator_to_array( $statement->fetchValues() );
 
 		$this->assertEquals( [ 'Alice', 'Bob', 'Charlie' ], $values );
 	}
@@ -60,8 +62,8 @@ class PreparedSqlStatementTest extends TestCase
 	{
 		$sqlManager = $this->buildSqlManager();
 
-		$stmt = $sqlManager->prepare( 'SELECT * FROM test_users WHERE name = :name' );
-		$row  = $stmt->fetchRow( [ 'name' => 'Bob' ] );
+		$statement = $sqlManager->prepare( 'SELECT * FROM test_users WHERE name = :name' );
+		$row  = $statement->fetchRow( [ 'name' => 'Bob' ] );
 
 		$this->assertEquals( 'Bob', $row['name'] );
 		$this->assertEquals( 'user', $row['role'] );
@@ -71,8 +73,8 @@ class PreparedSqlStatementTest extends TestCase
 	{
 		$sqlManager = $this->buildSqlManager();
 
-		$stmt = $sqlManager->prepare( 'SELECT * FROM test_users ORDER BY id' );
-		$rows = iterator_to_array( $stmt->fetchRows() );
+		$statement = $sqlManager->prepare( 'SELECT * FROM test_users ORDER BY id' );
+		$rows = iterator_to_array( $statement->fetchRows() );
 
 		$this->assertCount( 3, $rows );
 		$this->assertEquals( 'Charlie', $rows[2]['name'] );
@@ -82,8 +84,8 @@ class PreparedSqlStatementTest extends TestCase
 	{
 		$sqlManager = $this->buildSqlManager();
 
-		$stmt   = $sqlManager->prepare( 'SELECT * FROM test_users WHERE name = :name' );
-		$entity = $stmt->fetchEntity( UserEntity::class, [ 'name' => 'Alice' ] );
+		$statement   = $sqlManager->prepare( 'SELECT * FROM test_users WHERE name = :name' );
+		$entity = $statement->fetchEntity( UserEntity::class, [ 'name' => 'Alice' ] );
 
 		$this->assertEquals( 'Alice', $entity->name );
 		$this->assertEquals( 'admin', $entity->role );
@@ -93,8 +95,8 @@ class PreparedSqlStatementTest extends TestCase
 	{
 		$sqlManager = $this->buildSqlManager();
 
-		$stmt     = $sqlManager->prepare( 'SELECT * FROM test_users ORDER BY id' );
-		$entities = iterator_to_array( $stmt->fetchEntities( UserEntity::class ) );
+		$statement     = $sqlManager->prepare( 'SELECT * FROM test_users ORDER BY id' );
+		$entities = iterator_to_array( $statement->fetchEntities( UserEntity::class ) );
 
 		$this->assertCount( 3, $entities );
 		$this->assertEquals( 'Charlie', $entities[2]->name );
@@ -104,8 +106,8 @@ class PreparedSqlStatementTest extends TestCase
 	{
 		$sqlManager = $this->buildSqlManager();
 
-		$stmt   = $sqlManager->prepare( 'SELECT * FROM test_users ORDER BY role, id' );
-		$groups = iterator_to_array( $stmt->fetchGroupedBy( 'role' ) );
+		$statement   = $sqlManager->prepare( 'SELECT * FROM test_users ORDER BY role, id' );
+		$groups = iterator_to_array( $statement->fetchGroupedBy( 'role' ) );
 
 		$this->assertArrayHasKey( 'admin', $groups );
 		$this->assertArrayHasKey( 'user', $groups );
@@ -119,8 +121,76 @@ class PreparedSqlStatementTest extends TestCase
 		$sqlManager = $this->buildSqlManager();
 
 		$this->expectException( QueryException::class );
-		$stmt = $sqlManager->prepare( 'SELECT * FROM invalid_table' );
-		$stmt->fetchRow();
+		$statement = $sqlManager->prepare( 'SELECT * FROM invalid_table' );
+		$statement->fetchRow();
+	}
+
+	public function testFetchValuesKeepsFalsyValues(): void
+	{
+		$sqlManager = $this->buildSqlManager();
+
+		$statement = $sqlManager->prepare( 'SELECT value FROM test_values ORDER BY id' );
+		$values    = iterator_to_array( $statement->fetchValues() );
+
+		$this->assertSame( [ '0', null, '', 'x' ], $values );
+	}
+
+	public function testFetchValueReturnsNullForNullColumn(): void
+	{
+		$sqlManager = $this->buildSqlManager();
+
+		$statement = $sqlManager->prepare( 'SELECT value FROM test_values WHERE id = :id' );
+
+		$this->assertNull( $statement->fetchValue( [ 'id' => 2 ] ) );
+		$this->assertSame( '0', $statement->fetchValue( [ 'id' => 1 ] ) );
+	}
+
+	public function testFetchValueCastsIntegersToString(): void
+	{
+		$sqlManager = $this->buildSqlManager( false );
+
+		$statement = $sqlManager->prepare( 'SELECT id FROM test_values ORDER BY id' );
+
+		$this->assertSame( [ '1', '2', '3', '4' ], iterator_to_array( $statement->fetchValues() ) );
+	}
+
+	public function testFetchRowsReturnsAllRowsIncludingFalsyValues(): void
+	{
+		$sqlManager = $this->buildSqlManager();
+
+		$statement = $sqlManager->prepare( 'SELECT value FROM test_values ORDER BY id' );
+
+		$this->assertCount( 4, iterator_to_array( $statement->fetchRows() ) );
+	}
+
+	public function testFetchGroupedByHandlesNullGroup(): void
+	{
+		$sqlManager = $this->buildSqlManager();
+
+		$statement = $sqlManager->prepare( 'SELECT * FROM test_values ORDER BY category, id' );
+		$groups    = [];
+
+		foreach ( $statement->fetchGroupedBy( 'category' ) as $category => $rows )
+		{
+			$groups[] = [ $category, count( $rows ) ];
+		}
+
+		$this->assertSame( [ [ null, 2 ], [ 'a', 2 ] ], $groups );
+	}
+
+	public function testGetAffectedRowCount(): void
+	{
+		$sqlManager = $this->buildSqlManager();
+
+		$sqlManager->getPdo()->exec( 'CREATE TABLE test_counts (id INT PRIMARY KEY, flag INT)' );
+		$sqlManager->getPdo()->exec( 'INSERT INTO test_counts (id, flag) VALUES (1, 0), (2, 0), (3, 1)' );
+
+		$statement = $sqlManager->prepare( 'UPDATE test_counts SET flag = :flag WHERE flag = 0' );
+		$statement->execute( [ 'flag' => 1 ] );
+
+		$this->assertSame( 2, $statement->getAffectedRowCount() );
+
+		$sqlManager->getPdo()->exec( 'DROP TABLE test_counts' );
 	}
 
 	private function buildSqlManager( bool $emulatedPrepares = true ): SqlManager

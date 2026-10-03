@@ -1,6 +1,7 @@
-/.idea/
 /vendor/
-/build/logs/
 /composer.lock
+/.idea
+/.tmp
+/build/.phpunit.cache/
+/build/.php-cs-fixer.cache
 /build/.phpunit.result.cache
-/.tmp/
